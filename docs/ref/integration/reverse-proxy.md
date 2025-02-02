@@ -139,3 +139,68 @@ The following minimal Apache config will proxy traffic to the headscale instance
 	SSLCertificateKeyFile <PATH_CERT_KEY>
 </VirtualHost>
 ```
+
+## NPM: Nginx Proxy Manager
+
+The following NPM config is all that is necessary to use NPM as a reverse proxy for headscale, in combination with the `config.yaml` specifications above to disable headscale's built in TLS. Replace values as necessary `<IP:PORT>` should be the IP address and port where headscale is running. To use with a Headscale Admin Web UI, replace where applicabe with your <UI_IP:UI_PORT>
+
+```npm title="NPM"
+ssl_stapling off;
+
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
+
+location /web/ {
+    proxy_pass http://<IP:PORT>/web;
+    
+    # to use with headscale admin / web ui and not error out with CORS
+	if ($http_origin = "https://<UI_IP:UI_PORT>") {
+    	set $cors_origin "https://<UI_IP:UI_PORT>";
+	}
+	
+    # all other source urls/default
+	if ($cors_origin = "") {
+    	set $cors_origin $http_origin;
+	}
+
+    add_header Access-Control-Allow-Origin $cors_origin always;    
+    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
+
+    if ($request_method = 'OPTIONS') {
+        return 204;
+    }
+}
+
+# Config for /api/ url (used by admin web ui)
+location /api {
+    proxy_pass http://<HEADSCALE_SERVER_IP>:8080/api;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+
+   if ($http_origin = "https://<UI_IP:UI_PORT>") {
+    	set $cors_origin "https://<UI_IP:UI_PORT>";
+    }
+	
+    # all other source urls/default
+	if ($cors_origin = "") {
+    	set $cors_origin $http_origin;
+     }
+
+    add_header Access-Control-Allow-Origin $cors_origin always;
+    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
+
+    if ($request_method = 'OPTIONS') {
+        return 204;
+    }
+
+    # Timeouts
+    send_timeout 5m;
+    proxy_read_timeout 240;
+    proxy_send_timeout 240;
+    proxy_connect_timeout 240;
+}
+```
